@@ -1,22 +1,31 @@
-import arcpy, os, shutil
+import os
+import arcpy
+from arcpy import env
 import pandas as pd
+import os, shutil
 
-no_of_terms = 3
-year = "2010_11"
-folder_name = "Project_2010_11"
-t0_file = "Project_2010_11_T0"
-t1_file = "Project_2010_11_T1"
-t2_file = "Project_2010_11_T2"
-t3_file = "Project_2010_11_T3"
-t4_file = ""
-t5_file = ""
+no_of_terms = 5
+year = "2009_10"
+folder_name = "Project_2009_10"
+t0_file = "Project_2009_10_T0"
+t1_file = "Project_2009_10_T1"
+t2_file = "Project_2009_10_T2"
+t3_file = "Project_2009_10_T3"
+t4_file = "Project_2009_10_T4"
+t5_file = "Project_2009_10_T5"
 
-drive_path = "E:\Project"
-
+drive_path = r"E:\Project"
+env_path = r"C:\Users\HP\Desktop\dissolve\env"
+env.workspace = env_path
 out_path = r"C:\Users\HP\Desktop\dissolve\output"
+rm_files = []
 
 for filename in os.listdir(out_path):
-    file_path = os.path.join(out_path, filename)
+    rm_files.append(os.path.join(out_path, filename))
+for filename in os.listdir(env_path):
+    rm_files.append(os.path.join(env_path, filename))
+
+for file_path in rm_files:
     try:
         if os.path.isfile(file_path) or os.path.islink(file_path):
             os.unlink(file_path)
@@ -25,100 +34,90 @@ for filename in os.listdir(out_path):
     except Exception as e:
         print('Failed to delete %s. Reason: %s' % (file_path, e))
 
-t0_input = os.path.join(drive_path, year, folder_name, str("T0"), str(t0_file) + ".shp")
-t1_input = os.path.join(drive_path, year, folder_name, str("T1"), str(t1_file) + ".shp")
-t2_input = os.path.join(drive_path, year, folder_name, str("T2"), str(t2_file) + ".shp")
-t3_input = os.path.join(drive_path, year, folder_name, str("T3"), str(t3_file) + ".shp")
-t4_input = os.path.join(drive_path, year, folder_name, str("T4"), str(t4_file) + ".shp")
-t5_input = os.path.join(drive_path, year, folder_name, str("T5"), str(t5_file) + ".shp")
+original_files = [t0_file, t1_file, t2_file, t3_file, t4_file, t5_file]
+for count in range(len(original_files)):
+    original_file = original_files[count]
+    term_name = "T"+str(count)
+    o_path = os.path.join(drive_path,year,folder_name,term_name,original_file+".shp")
+    arcpy.CopyFeatures_management(o_path,original_file+".shp")
 
-t0_output = os.path.join(out_path, str("T0") + ".shp")
-t1_output = os.path.join(out_path, str("T1") + ".shp")
-t2_output = os.path.join(out_path, str("T2") + ".shp")
-t3_output = os.path.join(out_path, str("T3") + ".shp")
-t4_output = os.path.join(out_path, str("T4") + ".shp")
-t5_output = os.path.join(out_path, str("T5") + ".shp")
+code_variants = {
+    'Code_1' : '!Code_1!',
+    'Code_12' : '!Code_12!',
+    'Code_13' : '!Code_13!',
+    'Code_1_2' : '!Code_1_2!',
+}
 
-t0_t1_output = os.path.join(out_path, str("T0_T1") + ".shp")
-t1_t2_output = os.path.join(out_path, str("T1_T2") + ".shp")
-t2_t3_output = os.path.join(out_path, str("T2_T3") + ".shp")
-t3_t4_output = os.path.join(out_path, str("T3_T4") + ".shp")
-t4_t5_output = os.path.join(out_path, str("T4_T5") + ".shp")
+inputList = arcpy.ListFeatureClasses()
 
-t0_dissolve_in = os.path.join(out_path, str("T0") + ".dbf")
-t1_dissolve_in = os.path.join(out_path, str("T1") + ".dbf")
-t2_dissolve_in = os.path.join(out_path, str("T2") + ".dbf")
-t3_dissolve_in = os.path.join(out_path, str("T3") + ".dbf")
-t4_dissolve_in = os.path.join(out_path, str("T4") + ".dbf")
-t5_dissolve_in = os.path.join(out_path, str("T5") + ".dbf")
+for file in inputList:
+    for i in arcpy.ListFields(file):
+        if i.name in list(code_variants.keys()):
+            arcpy.AddField_management(file, "Code", "TEXT")
+            arcpy.CalculateField_management(file, "Code",code_variants[i.name],"PYTHON")
+            arcpy.DeleteField_management(file, list(code_variants.keys()))
+    arcpy.AddField_management(file, "Descrpn", "TEXT")
+    expr = "getClass(!Code!)"
+    codeblock = """def getClass(desc):
+        agri_des=['AGCR','AGPL','AGAQ']
+        bui_des=['BUMN','BURH','BURV','BUTP','BUUR','BURM','BURU','BUUC','BUUP']
+        forest_des=['FRDE','FRPL','FRMG']
+        water_des=['WBCN','WBLP','WBRS','WBRT']
+        waste_des=['WLBR','WLGU','WLSA','WLSD','WLSP','WLST','WLWL']
+        if desc in agri_des:
+            return 'Agriculture'
+        elif desc in bui_des:
+            return 'Built'
+        elif desc in forest_des:
+            return 'Forest'
+        elif desc in water_des:
+            return 'Water'
+        elif desc in waste_des:
+            return 'Waste'
+        else:
+            return 'Unknown'"""
+    arcpy.CalculateField_management(file, "Descrpn", expr, "PYTHON", codeblock)
 
-t0_dissolve_out = os.path.join(out_path, str("T0") + ".xls")
-t1_dissolve_out = os.path.join(out_path, str("T1") + ".xls")
-t2_dissolve_out = os.path.join(out_path, str("T2") + ".xls")
-t3_dissolve_out = os.path.join(out_path, str("T3") + ".xls")
-t4_dissolve_out = os.path.join(out_path, str("T4") + ".xls")
-t5_dissolve_out = os.path.join(out_path, str("T5") + ".xls")
-
-t0t1_intersect_in = os.path.join(out_path, str("T0_T1") + ".dbf")
-t1t2_intersect_in = os.path.join(out_path, str("T1_T2") + ".dbf")
-t2t3_intersect_in = os.path.join(out_path, str("T2_T3") + ".dbf")
-t3t4_intersect_in = os.path.join(out_path, str("T3_T4") + ".dbf")
-t4t5_intersect_in = os.path.join(out_path, str("T4_T5") + ".dbf")
-
-t0t1_intersect_out = os.path.join(out_path, str("A_Pivot_T0_T1") + ".xls")
-t1t2_intersect_out = os.path.join(out_path, str("A_Pivot_T1_T2") + ".xls")
-t2t3_intersect_out = os.path.join(out_path, str("A_Pivot_T2_T3") + ".xls")
-t3t4_intersect_out = os.path.join(out_path, str("A_Pivot_T3_T4") + ".xls")
-t4t5_intersect_out = os.path.join(out_path, str("A_Pivot_T4_T5") + ".xls")
-
-combined_dissolve_out = os.path.join(out_path, str("A_Combined_Dissolve") + ".xls")
+outputList = ["T0.shp", "T1.shp", "T2.shp", "T3.shp", "T4.shp", "T5.shp"]
+TToutputList = ["T0_T1.shp", "T1_T2.shp", "T2_T3.Shp", "T3_T4.shp", "T4_T5.shp"]
+dissolveInList = ["T0.dbf", "T1.dbf", "T2.dbf", "T3.dbf", "T4.dbf", "T5.dbf"]
+dissolveOutList = ["T0.xls", "T1.xls", "T2.xls", "T3.xls", "T4.xls", "T5.xls"]
+IntersectInList = ["T0_T1.dbf", "T1_T2.dbf", "T2_T3.dbf", "T3_T4.dbf", "T4_T5.dbf"]
+IntersectOutList = ["T0_T1.xls", "T1_T2.xls", "T2_T3.xls", "T3_T4.xls", "T4_T5.xls"]
 
 def dissolve_func(input, output):
-	try:
-		arcpy.Dissolve_management(input, output, ["Code"])
-	except:
-		try:
-			arcpy.Dissolve_management(input, output, ["Code_1"])
-		except:
-			arcpy.Dissolve_management(input, output, ["Code_12"])
-	arcpy.AddField_management(output, "Area", "DOUBLE")
-	arcpy.CalculateField_management(output,'Area','!shape.area@hectares!','PYTHON')
+    arcpy.Dissolve_management(input, output, ["Descrpn"])
+    arcpy.AddField_management(output, "Arrr", "DOUBLE")
+    arcpy.CalculateField_management(output,'Arrr','!shape.area@hectares!','PYTHON')
 
 def intersect_func(input, output):
-	arcpy.Intersect_analysis(input, output)
-	arcpy.AddField_management(output, "Area", "DOUBLE")
-	arcpy.CalculateField_management(output,'Area','!shape.area@hectares!','PYTHON')
-
-inputList = [t0_input, t1_input, t2_input, t3_input, t4_input, t5_input]
-outputList = [t0_output, t1_output, t2_output, t3_output, t4_output, t5_output]
-TToutputList = [t0_t1_output, t1_t2_output, t2_t3_output, t3_t4_output, t4_t5_output]
-dissolveInList = [t0_dissolve_in, t1_dissolve_in, t2_dissolve_in, t3_dissolve_in, t4_dissolve_in, t5_dissolve_in]
-dissolveOutList = [t0_dissolve_out, t1_dissolve_out, t2_dissolve_out, t3_dissolve_out, t4_dissolve_out, t5_dissolve_out]
-IntersectInList = [t0t1_intersect_in, t1t2_intersect_in, t2t3_intersect_in, t3t4_intersect_in, t4t5_intersect_in]
-IntersectOutList = [t0t1_intersect_out, t1t2_intersect_out, t2t3_intersect_out, t3t4_intersect_out, t4t5_intersect_out]
+    arcpy.Intersect_analysis(input, output)
+    arcpy.AddField_management(output, "Arrr", "DOUBLE")
+    arcpy.CalculateField_management(output,'Arrr','!shape.area@hectares!','PYTHON')
 
 for rep in range(no_of_terms+1):
-	dissolve_func(inputList[rep], outputList[rep])
-	arcpy.TableToExcel_conversion(dissolveInList[rep], dissolveOutList[rep])
-	if rep != 0:
-		intersect_func([inputList[rep-1], inputList[rep]], TToutputList[rep-1])
-		arcpy.TableToExcel_conversion(IntersectInList[rep-1], IntersectOutList[rep-1])
+    dissolve_func(inputList[rep], outputList[rep])
+    arcpy.TableToExcel_conversion(dissolveInList[rep], dissolveOutList[rep])
+    if rep != 0:
+        intersect_func([inputList[rep-1], inputList[rep]], TToutputList[rep-1])
+        arcpy.TableToExcel_conversion(IntersectInList[rep-1], IntersectOutList[rep-1])
 
 combined_df = pd.DataFrame()
+combined_dissolve_out = os.path.join(out_path, str("A_Combined_Dissolve") + ".xls")
 
 def excel_func(inputDF):
-	inputDF = inputDF.drop(['FID'], axis=1)
-	inputDF = inputDF.T
-	inputDF = inputDF.reset_index(drop=True)
-	new_header = inputDF.iloc[0]
-	inputDF = inputDF[1:]
-	inputDF.columns = new_header
-	return inputDF
+    inputDF = inputDF.drop(['FID'], axis=1)
+    inputDF = inputDF.T
+    inputDF = inputDF.reset_index(drop=True)
+    new_header = inputDF.iloc[0]
+    inputDF = inputDF[1:]
+    inputDF.columns = new_header
+    return inputDF
 
-excel_list = [t0_dissolve_out, t1_dissolve_out, t2_dissolve_out, t3_dissolve_out, t4_dissolve_out, t5_dissolve_out]
+excel_list = [os.path.join(env_path,i) for i in dissolveOutList]
 for ind, i in enumerate(excel_list):
-	if ind < no_of_terms+1:
-		combined_df = combined_df.append(excel_func(pd.read_excel(i)), ignore_index=True)
+    if ind < no_of_terms+1:
+        combined_df = combined_df.append(excel_func(pd.read_excel(i)), ignore_index=True)
 
 combined_df = combined_df.fillna(0)
 combined_df.to_excel(combined_dissolve_out)
