@@ -27,3 +27,9 @@ removes the '0' values in bands and mosaic the tif files of corresponding projec
 gdalbuildvrt.py :
 
 since Mosaic.py takes tremendous amount of time and space, GDAL virtual raster (VRT) format is used to mosaic the tif files of corresponding project years.
+
+
+export_layout.py :
+
+toggles layer visibility, applies symbology, labeling, layout and exports to jpeg.
+
